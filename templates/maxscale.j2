@@ -1,0 +1,61 @@
+[maxscale]
+threads=auto
+admin_host=0.0.0.0
+{% if inventory_hostname == 'maxscale2' %}
+passive=true
+{% endif %}
+
+[DatabaseMonitor]
+type=monitor
+module=mariadbmon
+servers=db1,db2,db3
+user={{ maxscale_user }}
+password={{ hexadecimal.stdout }}
+replication_user={{ repli_user }}
+replication_password={{ repli_pass }}
+monitor_interval=100
+journal_max_age=28800
+script_timeout=90
+detect_standalone_master=true
+enforce_read_only_slaves=true
+verify_master_failure=true
+auto_failover=true
+auto_rejoin=true
+
+[SplitterService]
+type=service
+router=readwritesplit
+servers=db1,db2,db3
+user={{ maxscale_user }}
+password={{ hexadecimal.stdout }}
+use_sql_variables_in=master
+strict_multi_stmt=true
+strict_sp_calls=true
+#master_accept_reads=true
+{% if maxscale_version|float > 2.2 %}
+causal_reads=true
+{% endif %}
+
+[SplitterListener]
+type=listener
+service=SplitterService
+protocol=MariaDBClient
+port=3306
+
+[db1]
+type=server
+address={{ db1_private_ip }}
+port=3306
+protocol=MariaDBBackend
+
+[db2]
+type=server
+address={{ db2_private_ip }}
+port=3306
+protocol=MariaDBBackend
+
+[db3]
+type=server
+address={{ db3_private_ip }}
+port=3306
+protocol=MariaDBBackend

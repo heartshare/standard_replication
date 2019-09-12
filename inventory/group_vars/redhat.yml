@@ -1,0 +1,54 @@
+---
+
+ethernet_interface: eth1
+version: 7
+mariadb_socket: /var/lib/mysql/mysql.sock
+
+boost: boost
+cmake: cmake
+development_tools: "@Development tools"
+expect: expect
+file: file
+jemalloc: jemalloc
+libaio: libaio
+lz4_devel: lz4-devel
+lz4: lz4
+mariadb_backup: MariaDB-backup
+mariadb_client: MariaDB-client
+mariadb_columnstore_api: mariadb-columnstore-api-cpp
+mariadb_columnstore_client: mariadb-columnstore-client
+mariadb_columnstore_common: mariadb-columnstore-common
+mariadb_columnstore_gssapi: mariadb-columnstore-gssapi-server
+mariadb_columnstore_libs: mariadb-columnstore-libs
+mariadb_columnstore_maxscale: mariadb-columnstore-data-adapters-maxscale-cdc-adapter
+mariadb_columnstore_platform: mariadb-columnstore-platform
+mariadb_columnstore_server: mariadb-columnstore-server
+mariadb_columnstore_shared: mariadb-columnstore-shared
+mariadb_columnstore_storage: mariadb-columnstore-storage-engine
+mariadb_columnstore_tools: mariadb-columnstore-tools
+mariadb_rocks: MariaDB-rocksdb-engine
+mariadb_server: MariaDB-server
+mariadb_spider: none
+mariadb: mariadb*
+maxscale_cdc_connector: maxscale-cdc-connector
+mlocate: mlocate
+mysql_python: MySQL-python
+nano: nano
+net_tools: net-tools
+nmap: nmap
+numactl_libs: numactl-libs
+openssl: openssl
+perl_DBI: perl-DBI
+perl: perl
+pid: /var/lib/mysql/mysql.pid
+pigz: pigz
+readline_dev: readline-devel
+rsync: rsync
+snappy: snappy
+socat: socat
+socket: /var/lib/mysql/mysql.sock
+tcl: tcl
+tcp_wrappers_devel: tcp_wrappers-devel
+tzdata: tzdata
+unzip: unzip
+zlib: zlib

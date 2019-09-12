@@ -1,0 +1,329 @@
+---
+
+- hosts: "all"
+  become: True
+  become_user: root
+  vars_files:
+    - 'inventory/group_vars/{{ ansible_os_family|lower }}.yml'
+
+  tasks:
+
+  - name: "Setting Selinux To Permissive"
+    selinux:
+      policy: targeted
+      state: permissive
+    when: ansible_os_family == 'RedHat'
+
+  - name: "Install Aptitude"
+    package:
+      name: 'aptitude'
+      state: latest
+      force_apt_get: True
+    when: ansible_os_family == 'Debian'
+
+  - name: "Install EPEL Release"
+    package:
+      name: 'epel-release'
+      state: latest
+    when: ansible_os_family == 'RedHat'
+
+  - name: "Setting Soft Open File Limits"
+    pam_limits:
+      domain: '*'
+      limit_type: soft
+      limit_item: nofile
+      value: '65535'
+
+  - name: "Setting Hard Open File Limits"
+    pam_limits:
+      domain: '*'
+      limit_type: hard
+      limit_item: nofile
+      value: '65535'
+
+  - name: "Adjusting OS Swappiness"
+    sysctl:
+      name: vm.swappiness
+      value: '1'
+      state: present
+
+  - name: "Installing New MariaDB Repo"
+    shell: curl -sS https://downloads.mariadb.com/MariaDB/mariadb_repo_setup | sudo bash -s -- --mariadb-server-version=mariadb-{{ mariadb_version }} --mariadb-maxscale-version={{ maxscale_version }}
+    args:
+      warn: False
+
+  - name: "Upgrading All Packages"
+    package:
+      name: '*'
+      state: latest
+
+  - name: Installing Some Basic Packages
+    package:
+      name: '{{ packages }}'
+      state: present
+    vars:
+      packages:
+      - '{{ mariadb_client }}'
+      - '{{ nano }}'
+      - '{{ mysql_python }}'
+      - '{{ pigz }}'
+      - '{{ socat }}'
+
+- hosts: "mariadb"
+  become: True
+  become_user: root
+  vars_files:
+    - 'inventory/group_vars/{{ ansible_os_family|lower }}.yml'
+
+  tasks:
+
+  - name: "Installing MariaDB Server"
+    package:
+      name: "{{ packages }}"
+      state: present
+    vars:
+      packages:
+      - '{{ mariadb_server }}'
+      - '{{ mariadb_rocks }}'
+      - '{{ mariadb_backup }}'
+
+  - name: "Creating MySQL Log Directory"
+    file:
+      path: /var/log/mysql
+      state: directory
+      mode: 0755
+      owner: mysql
+      group: mysql
+
+  - name: "Creating/Updating server.cnf"
+    template:
+      src: templates/base.j2
+      dest: /etc/my.cnf.d/server.cnf
+    when: ansible_os_family == 'RedHat'
+
+  - name: "Creating/Updating my.cnf"
+    template:
+      src: templates/base.j2
+      dest: /etc/mysql/my.cnf
+    when: ansible_os_family == 'Debian'
+
+  - name: "Creating Log Folder"
+    file:
+      path: /var/log/mysql
+      state: directory
+      mode: 0755
+      owner: mysql
+      group: mysql
+
+  - name: "Installing/Updating timeouts.conf Template"
+    template:
+      src: templates/timeouts.j2
+      dest: /etc/systemd/system/mariadb.service.d/timeouts.conf
+
+  - name: "Reloading Systemd"
+    command: systemctl daemon-reload
+
+  - name: "Stopping MariaDB"
+    systemd:
+      name: mysql
+      enabled: yes
+      state: stopped
+
+- hosts: "db1"
+  become: True
+  become_user: root
+  vars_files:
+    - 'inventory/group_vars/{{ ansible_os_family|lower }}.yml'
+
+  tasks:
+
+  - name: "Starting MariaDB on Master"
+    systemd:
+      name: mysql
+      enabled: yes
+      state: restarted
+
+  - name: "Stopping Replication On Master If Necessary"
+    mysql_replication:
+     mode: stopslave
+
+  - name: "Resetting Replication On Master If Necessary"
+    mysql_replication:
+      mode: resetslaveall
+
+  - name: "Setting Master Write Enabled"
+    mysql_variables:
+      variable: read_only
+      value: 0
+
+  - name: "Removing Unnecessary Users"
+    command: mysql -e "SET SESSION binlog_format = 'STATEMENT'; DELETE FROM `mysql`.`user` WHERE `host` IN ('mariadb1','mariadb2','mariadb3');";
+
+  - name: "Removing 'test' Database"
+    mysql_db:
+      name: test
+      state: absent
+
+  - name: "Removing ''@'localhost'"
+    mysql_user:
+      name: ''
+      host: 'localhost'
+      state: absent
+
+  - name: "Removing 'root'@'::1'"
+    mysql_user:
+      name: root
+      host: "::1"
+      state: absent
+
+  - name: "Adding '{{ maxscale_user }}'@'%'"
+    mysql_user:
+      name: '{{ maxscale_user }}'
+      host: '%'
+      password: "{{ maxscale_pass }}"
+      update_password: on_create
+      priv: '*.*:SUPER,RELOAD,REPLICATION CLIENT,REPLICATION SLAVE,SHOW DATABASES/mysql.db:SELECT/mysql.user:SELECT/mysql.roles_mapping:SELECT/mysql.tables_priv:SELECT'
+      state: present
+
+  - name: "Adding SST/Mariabackup User"
+    mysql_user:
+      name: "{{ sst_user }}"
+      password: "{{ sst_pass }}"
+      host: "localhost"
+      priv: '*.*:RELOAD,LOCK TABLES,REPLICATION CLIENT,CREATE TABLESPACE,PROCESS,SUPER,CREATE,INSERT,SELECT'
+      state: present
+
+  - name: "Adding '{{ dba_user }}'@'localhost'"
+    mysql_user:
+      name: '{{ dba_user }}'
+      host: 'localhost'
+      password: '{{ dba_pass }}'
+      update_password: on_create
+      priv: '*.*:ALL,GRANT'
+      state: present
+
+  - name: "Adding '{{ dba_user }}'@'127.0.0.1'"
+    mysql_user:
+      name: '{{ dba_user }}'
+      host: '127.0.0.1'
+      password: '{{ dba_pass }}'
+      update_password: on_create
+      priv: '*.*:ALL,GRANT'
+      state: present
+
+  - name: "Adding '{{ dba_user }}'@'%'"
+    mysql_user:
+      name: '{{ dba_user }}'
+      host: '%'
+      password: '{{ dba_pass }}'
+      update_password: on_create
+      priv: '*.*:ALL,GRANT'
+      state: present
+
+  - name: "Adding '{{ repli_user }}'@'%'"
+    mysql_user:
+      name: '{{ repli_user }}'
+      host: '%'
+      password: '{{ repli_pass }}'
+      update_password: on_create
+      priv: '*.*:REPLICATION CLIENT,REPLICATION SLAVE'
+      state: present
+
+  - name: "Adding '{{ repli_user }}'@'localhost'"
+    mysql_user:
+      name: '{{ repli_user }}'
+      host: 'localhost'
+      password: '{{ repli_pass }}'
+      update_password: on_create
+      priv: '*.*:REPLICATION CLIENT,REPLICATION SLAVE'
+      state: present
+
+- hosts: "db2,db3"
+  become: True
+  become_user: root
+  vars_files:
+    - 'inventory/group_vars/{{ ansible_os_family|lower }}.yml'
+
+  tasks:
+
+  - name: "Starting MariaDB on Slaves"
+    systemd:
+      name: mysql
+      enabled: yes
+      state: restarted
+
+  - name: "Setting Slaves Read Only"
+    mysql_variables:
+      variable: read_only
+      value: 1
+
+  - name: "Stopping Slaves"
+    mysql_replication:
+     mode: stopslave
+
+  - name: "Setting Master Info"
+    mysql_replication:
+      mode: changemaster
+      master_host: '{{ db1_private_ip }}'
+      master_user: '{{ repli_user }}'
+      master_password: '{{ repli_pass }}'
+
+  - name: "Converting to MariaDB GTID"
+    command: mysql -e "CHANGE MASTER TO master_use_gtid=slave_pos";
+
+  - name: "Starting Slaves"
+    mysql_replication:
+     mode: startslave
+
+- hosts: "maxscale"
+  become: True
+  become_user: root
+  vars_files:
+    - 'inventory/group_vars/{{ ansible_os_family|lower }}.yml'
+
+  tasks:
+
+  - name: "Installing MaxScale"
+    package:
+      name: "{{ packages }}"
+      state: present
+    vars:
+      packages:
+      - maxscale
+
+  - name: "Removing Old Secrets"
+    file:
+      path: /var/lib/maxscale/.secrets
+      state: absent
+
+  - name: "Creating New Secrets"
+    command: maxkeys /var/lib/maxscale/
+
+  - name: "Changing Owner Of Secrets"
+    file:
+      path: /var/lib/maxscale/.secrets
+      state: touch
+      owner: maxscale
+      group: maxscale
+
+  - name: "Creating Encrypted Password"
+    command: maxpasswd /var/lib/maxscale/ {{ maxscale_pass }}
+    register: hexadecimal
+
+  - name: "Copying maxscale.cnf"
+    template:
+      src: templates/maxscale.j2
+      dest: /etc/maxscale.cnf
+
+  - name: "Creating MaxScale Extra Folder"
+    file:
+      path: /etc/maxscale.cnf.d/
+      state: directory
+      owner: maxscale
+      group: maxscale
+
+  - name: "Restarting MaxScale"
+    systemd:
+      name: maxscale
+      enabled: True
+      state: restarted

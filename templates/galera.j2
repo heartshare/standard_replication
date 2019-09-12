@@ -1,0 +1,11 @@
+wsrep_cluster_address           	= gcomm://{{ db1_private_ip }},{{ db2_private_ip }},{{ db3_private_ip }}
+wsrep_cluster_name              	= galera_cluster
+wsrep_forced_binlog_format      	= ROW
+wsrep_node_address              	= {{ vars['ansible_' + ethernet_interface]['ipv4']['address'] }}
+wsrep_node_name                 	= {{ inventory_hostname }}
+wsrep_on                        	= ON
+wsrep_provider                  	= /usr/lib64/galera/libgalera_smm.so
+wsrep_provider_options          	= "gcs.fc_limit=32;gcache.size=2G;gcache.recover=yes"
+wsrep_slave_threads             	= {{ ansible_processor_vcpus }}
+wsrep_sst_auth                  	= {{ sst_user }}:{{ sst_pass }}
+wsrep_sst_method                	= mariabackup

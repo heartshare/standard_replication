@@ -1,0 +1,35 @@
+---
+
+ethernet_interface: eth1
+
+mariadb_version: 10.4
+maxscale_version: 2.4
+
+mariadb_port: 3306
+volume_iops: 1000
+
+cs_system_name: MyColumnStoreCluster
+cs_tmpdir: /usr/local/mariadb/columnstore/mysql/tmp
+cs_mariadb_socket: /usr/local/mariadb/columnstore/mysql/lib/mysql/mysql.sock
+cs_mariadb_port: 3306
+
+maxscale_user: maxscale
+maxscale_pass: demo_password
+
+dba_user: dba
+dba_pass: demo_password
+
+sst_user: sst
+sst_pass: demo_password
+
+repli_pass: demo_password
+repli_user: repli
+
+db1_private_ip: 10.10.10.10
+db2_private_ip: 10.10.10.11
+db3_private_ip: 10.10.10.12
+
+encryption_on: 0
+galera_on: 0
+myrocks_on: 0
+replication_on: 1
