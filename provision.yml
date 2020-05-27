@@ -125,13 +125,14 @@
 
   - name: "Stopping MariaDB"
     systemd:
-      name: mysql
+      name: mariadb
       enabled: yes
       state: stopped
 
 - hosts: "db1"
   become: True
   become_user: root
+  no_log: True
   vars_files:
     - 'inventory/group_vars/{{ ansible_os_family|lower }}.yml'
 
@@ -139,7 +140,7 @@
 
   - name: "Starting MariaDB on Master"
     systemd:
-      name: mysql
+      name: mariadb
       enabled: yes
       state: restarted
 
@@ -154,7 +155,7 @@
   - name: "Setting Master Write Enabled"
     mysql_variables:
       variable: read_only
-      value: 0
+      value: '0'
 
   - name: "Removing Unnecessary Users"
     command: mysql -e "SET SESSION binlog_format = 'STATEMENT'; DELETE FROM `mysql`.`user` WHERE `host` IN ('mariadb1','mariadb2','mariadb3');";
@@ -248,14 +249,14 @@
 
   - name: "Starting MariaDB on Slaves"
     systemd:
-      name: mysql
+      name: mariadb
       enabled: yes
       state: restarted
 
   - name: "Setting Slaves Read Only"
     mysql_variables:
       variable: read_only
-      value: 1
+      value: '1'
 
   - name: "Stopping Slaves"
     mysql_replication:
